@@ -7,8 +7,11 @@ fn main() {
 
     for stream in listener.incoming() {
         match stream {
-            Ok(_stream) => {
+            Ok(mut _stream) => {
                 println!("accepted new connection");
+                if let Err(e) = write!(_stream, "PONG\r\n") {
+                    println!("error: {}", e);
+                }
             }
             Err(e) => {
                 println!("error: {}", e);
