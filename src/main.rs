@@ -9,7 +9,7 @@ fn main() {
         match stream {
             Ok(mut _stream) => {
                 println!("accepted new connection");
-                if let Err(e) = write!(_stream, "PONG\r\n") {
+                if let Err(e) = write!(_stream, "+PONG\r\n") {
                     println!("error: {}", e);
                 }
             }
