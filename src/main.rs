@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
-use std::{io::Write, net::TcpListener};
+use std::{
+    io::{BufRead, BufReader, BufWriter, Read, Write},
+    net::TcpListener,
+};
 
 fn main() {
     println!("Logs from your program will appear here!");
@@ -9,8 +12,12 @@ fn main() {
         match stream {
             Ok(mut _stream) => {
                 println!("accepted new connection");
-                if let Err(e) = write!(_stream, "+PONG\r\n") {
-                    println!("error: {}", e);
+                let reader = BufReader::new(&_stream);
+                let mut writer = BufWriter::new(&_stream);
+
+                for _ in reader.lines() {
+                    writer.write_all(b"+PONG\r\n");
+                    writer.flush();
                 }
             }
             Err(e) => {
