@@ -1,6 +1,11 @@
-use std::io::{self, Error, Read, Write};
+use std::io::{self, Read, Write};
 
 use mio::{Interest, net::TcpStream};
+
+use crate::{
+    command::dispatch,
+    resp::{ParseResult, parse_one},
+};
 
 pub struct Conn {
     pub stream: TcpStream,
@@ -68,6 +73,24 @@ impl Conn {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => break, // wait for next writable
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(_) => return,
+            }
+        }
+    }
+
+    pub fn process(&mut self) {
+        while !self.incoming.is_empty() {
+            match parse_one(&self.incoming) {
+                ParseResult::Complete(args, n) => {
+                    self.incoming.drain(..n);
+                    dispatch(args, &mut self.outgoing);
+                }
+                ParseResult::Malformed => {
+                    self.want_close = true;
+                    break;
+                }
+                ParseResult::Incomplete => {
+                    break;
+                }
             }
         }
     }

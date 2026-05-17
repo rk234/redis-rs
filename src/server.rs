@@ -1,16 +1,12 @@
 use std::{
     collections::HashMap,
-    io::{self, Read, Write},
+    io::{self},
     net::SocketAddr,
 };
 
 use mio::{Events, Interest, Poll, Token, net::TcpListener};
 
-use crate::{
-    command::dispatch,
-    connection::Conn,
-    resp::{self, ParseResult, parse_one},
-};
+use crate::connection::Conn;
 
 const LISTENER: Token = Token(0);
 
@@ -56,46 +52,18 @@ pub fn run(addr: SocketAddr) -> io::Result<()> {
                     if let Some(conn) = connections.get_mut(&token) {
                         if event.is_readable() {
                             conn.on_readable();
-                            println!(
-                                "incoming: |{:?}|",
-                                std::str::from_utf8(&conn.incoming).unwrap()
-                            );
                         }
 
-                        while !conn.incoming.is_empty() {
-                            match parse_one(&conn.incoming) {
-                                ParseResult::Complete(args, n) => {
-                                    println!(
-                                        "parsed: |{:?}|",
-                                        std::str::from_utf8(&conn.incoming[..n]).unwrap()
-                                    );
-                                    conn.incoming.drain(..n);
-                                    dispatch(args, &mut conn.outgoing);
-                                }
-                                ParseResult::Malformed => {
-                                    conn.want_close = true;
-                                    break;
-                                }
-                                ParseResult::Incomplete => {
-                                    break;
-                                }
-                            }
-                        }
+                        conn.process();
 
-                        if conn.current_interest != conn.desired_interest() {
-                            conn.current_interest = conn.desired_interest();
-                            poll.registry().reregister(
-                                &mut conn.stream,
-                                token,
-                                conn.current_interest,
-                            );
-                        }
+                        reconcile_interest(conn, &mut poll, token)?;
 
                         if !conn.outgoing.is_empty() {
                             conn.on_writable();
                         }
 
                         if conn.want_close {
+                            println!("closing connection: {:?}", conn.stream);
                             poll.registry().deregister(&mut conn.stream)?;
                             connections.remove(&token);
                         }
@@ -103,5 +71,15 @@ pub fn run(addr: SocketAddr) -> io::Result<()> {
                 }
             }
         }
+    }
+}
+
+fn reconcile_interest(conn: &mut Conn, poll: &mut Poll, token: Token) -> io::Result<()> {
+    if conn.current_interest != conn.desired_interest() {
+        conn.current_interest = conn.desired_interest();
+        poll.registry()
+            .reregister(&mut conn.stream, token, conn.current_interest)
+    } else {
+        Ok(())
     }
 }
