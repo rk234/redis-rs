@@ -1,3 +1,5 @@
+use std::io::Write;
+
 #[derive(Debug, PartialEq)]
 pub enum ParseResult {
     Complete(Resp, usize), //args, # of bytes consumed,
@@ -15,6 +17,26 @@ pub enum Resp {
     Array(i64, Vec<Resp>),
     Boolean(bool),
     Double(f64),
+}
+
+impl Resp {
+    pub fn serialize(&self, out: &mut Vec<u8>) {
+        match self {
+            Resp::String(s) => write!(out, "+{}\r\n", s).unwrap(),
+            Resp::Error(s) => write!(out, "-{}\r\n", s).unwrap(),
+            Resp::Integer(i) => write!(out, ":{}\r\n", i).unwrap(),
+            Resp::BulkString(len, s) => write!(out, "${}\r\n{}\r\n", len, s).unwrap(),
+            Resp::NullBulkString => out.extend_from_slice(b"$-1\r\n"),
+            Resp::Array(_, elems) => {
+                write!(out, "*{}\r\n", elems.len()).unwrap();
+                for elem in elems {
+                    elem.serialize(out);
+                }
+            }
+            Resp::Boolean(b) => out.extend_from_slice(if *b { b"#t\r\n" } else { b"#f\r\n" }),
+            Resp::Double(d) => write!(out, ",{}\r\n", d).unwrap(),
+        }
+    }
 }
 
 fn find_crlf(buf: &[u8], from: usize) -> Option<usize> {
@@ -355,5 +377,109 @@ mod tests {
     #[test]
     fn malformed_when_bulk_length_not_an_integer() {
         assert_eq!(parse_one(b"*1\r\n$abc\r\n"), ParseResult::Malformed);
+    }
+
+    fn serialize(resp: Resp) -> Vec<u8> {
+        let mut out = Vec::new();
+        resp.serialize(&mut out);
+        out
+    }
+
+    #[test]
+    fn serializes_simple_string() {
+        assert_eq!(serialize(Resp::String("OK".to_string())), b"+OK\r\n");
+    }
+
+    #[test]
+    fn serializes_error() {
+        assert_eq!(
+            serialize(Resp::Error("ERR bad".to_string())),
+            b"-ERR bad\r\n"
+        );
+    }
+
+    #[test]
+    fn serializes_integer() {
+        assert_eq!(serialize(Resp::Integer(42)), b":42\r\n");
+    }
+
+    #[test]
+    fn serializes_negative_integer() {
+        assert_eq!(serialize(Resp::Integer(-1)), b":-1\r\n");
+    }
+
+    #[test]
+    fn serializes_bulk_string() {
+        assert_eq!(
+            serialize(Resp::BulkString(4, "ping".to_string())),
+            b"$4\r\nping\r\n"
+        );
+    }
+
+    #[test]
+    fn serializes_empty_bulk_string() {
+        assert_eq!(
+            serialize(Resp::BulkString(0, "".to_string())),
+            b"$0\r\n\r\n"
+        );
+    }
+
+    #[test]
+    fn serializes_null_bulk_string() {
+        assert_eq!(serialize(Resp::NullBulkString), b"$-1\r\n");
+    }
+
+    #[test]
+    fn serializes_boolean_true() {
+        assert_eq!(serialize(Resp::Boolean(true)), b"#t\r\n");
+    }
+
+    #[test]
+    fn serializes_boolean_false() {
+        assert_eq!(serialize(Resp::Boolean(false)), b"#f\r\n");
+    }
+
+    #[test]
+    fn serializes_double() {
+        assert_eq!(serialize(Resp::Double(3.14)), b",3.14\r\n");
+    }
+
+    #[test]
+    fn serializes_array() {
+        assert_eq!(
+            serialize(Resp::Array(
+                2,
+                vec![
+                    Resp::BulkString(3, "SET".to_string()),
+                    Resp::BulkString(3, "foo".to_string()),
+                ]
+            )),
+            b"*2\r\n$3\r\nSET\r\n$3\r\nfoo\r\n"
+        );
+    }
+
+    #[test]
+    fn serializes_empty_array() {
+        assert_eq!(serialize(Resp::Array(0, vec![])), b"*0\r\n");
+    }
+
+    #[test]
+    fn serialize_roundtrips() {
+        let inputs: &[&[u8]] = &[
+            b"+OK\r\n",
+            b"-ERR bad\r\n",
+            b":42\r\n",
+            b"$4\r\nping\r\n",
+            b"$-1\r\n",
+            b"#t\r\n",
+            b"#f\r\n",
+            b"*2\r\n$3\r\nSET\r\n$3\r\nfoo\r\n",
+        ];
+        for input in inputs {
+            let ParseResult::Complete(resp, _) = parse_one(input) else {
+                panic!("failed to parse {:?}", input);
+            };
+            assert_eq!(&serialize(resp), input);
+        }
     }
 }

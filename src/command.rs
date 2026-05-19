@@ -11,10 +11,10 @@ pub fn dispatch(cmd: Resp, out: &mut Vec<u8>) {
 
     match cmd_name {
         Some(name) if name.eq_ignore_ascii_case("PING") => {
-            out.extend_from_slice(b"+PONG\r\n");
+            Resp::String(String::from("PONG")).serialize(out);
         }
         _ => {
-            out.extend_from_slice(b"-ERR unknown command\r\n");
+            Resp::Error(String::from("ERR unknown command")).serialize(out);
         }
     }
 }
