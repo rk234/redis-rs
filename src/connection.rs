@@ -81,6 +81,8 @@ impl Conn {
         while !self.incoming.is_empty() {
             match parse_one(&self.incoming) {
                 ParseResult::Complete(args, n) => {
+                    //TODO: optimization opportunity here, drain requires moving the other elements
+                    //in the buf
                     self.incoming.drain(..n);
                     dispatch(args, &mut self.outgoing);
                 }
