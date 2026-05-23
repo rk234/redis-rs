@@ -1,5 +1,5 @@
-use std::{mem, ptr};
 use super::htable::HTab;
+use std::{mem, ptr};
 
 const MAX_LOAD_FACTOR: usize = 8;
 const REHASH_CHUNK: usize = 128;
@@ -112,7 +112,10 @@ mod tests {
         let mut map: HMap<KVPair> = HMap::with_capacity(4);
         let h = hash_key("city");
         map.insert(h, kv("city", "tokyo"));
-        assert_eq!(map.lookup(h, eq_key("city")).map(|p| p.val.as_str()), Some("tokyo"));
+        assert_eq!(
+            map.lookup(h, eq_key("city")).map(|p| p.val.as_str()),
+            Some("tokyo")
+        );
     }
 
     #[test]
@@ -120,7 +123,10 @@ mod tests {
         let mut map: HMap<KVPair> = HMap::with_capacity(4);
         let h = hash_key("lang");
         map.insert(h, kv("lang", "rust"));
-        assert_eq!(map.remove(h, eq_key("lang")).map(|p| p.val), Some("rust".to_string()));
+        assert_eq!(
+            map.remove(h, eq_key("lang")).map(|p| p.val),
+            Some("rust".to_string())
+        );
     }
 
     #[test]
@@ -181,7 +187,10 @@ mod tests {
         }
         for i in 0..129usize {
             let key = format!("k{i}");
-            assert!(map.lookup(hash_key(&key), eq_key(&key)).is_none(), "k{i} still present after remove");
+            assert!(
+                map.lookup(hash_key(&key), eq_key(&key)).is_none(),
+                "k{i} still present after remove"
+            );
         }
     }
 

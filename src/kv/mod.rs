@@ -1,6 +1,6 @@
+mod hmap;
 mod hnode;
 mod htable;
-mod hmap;
 mod pair;
 
 pub use hmap::HMap;

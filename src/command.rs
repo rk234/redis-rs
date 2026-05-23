@@ -1,5 +1,36 @@
 use crate::resp::Resp;
 
+enum Command {
+    GET(String),
+    SET(String, String),
+    PING,
+}
+
+fn parse_cmd(cmd: Resp) -> Option<Command> {
+    let cmd_name = match &cmd {
+        Resp::Array(_, elements) => match elements.first() {
+            Some(Resp::BulkString(_, s)) => Some(s.as_str()),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    let Some(cmd_name) = cmd_name else {
+        return None;
+    };
+
+    match cmd_name {
+        "GET" => match &cmd {
+            Resp::Array(2, elements) => match &elements[1] {
+                Resp::BulkString(_, s) => Some(Command::GET(String::from(s))),
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub fn dispatch(cmd: Resp, out: &mut Vec<u8>) {
     let cmd_name = match &cmd {
         Resp::Array(_, elements) => match elements.first() {
