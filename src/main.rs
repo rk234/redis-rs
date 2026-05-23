@@ -2,6 +2,7 @@ use std::io;
 
 mod command;
 mod connection;
+mod kv;
 mod resp;
 mod server;
 
