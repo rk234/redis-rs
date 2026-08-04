@@ -38,6 +38,13 @@ impl<T: Clone> HMap<T> {
         }
     }
 
+    pub fn lookup_mut(&mut self, hash: usize, eq: impl Fn(&T) -> bool) -> Option<&mut T> {
+        match self.newer.lookup_mut(hash, &eq) {
+            Some(v) => Some(v),
+            None => self.older.as_mut()?.lookup_mut(hash, eq),
+        }
+    }
+
     pub fn remove(&mut self, hash: usize, eq: impl Fn(&T) -> bool) -> Option<T> {
         match self.newer.remove(hash, &eq) {
             None => self.older.as_mut()?.remove(hash, eq),

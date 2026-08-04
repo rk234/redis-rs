@@ -1,6 +1,6 @@
+use super::hnode::HNode;
 use std::alloc::{Layout, alloc_zeroed, dealloc};
 use std::ptr;
-use super::hnode::HNode;
 
 pub struct HTab<T> {
     pub(super) tab: *mut *mut HNode<T>,
@@ -42,6 +42,18 @@ impl<T: Clone> HTab<T> {
         None
     }
 
+    pub fn lookup_mut(&mut self, hash: usize, eq: impl Fn(&T) -> bool) -> Option<&mut T> {
+        let pos = hash & self.mask;
+        let mut node = unsafe { (*self.tab.add(pos)).as_mut() };
+        while let Some(n) = node {
+            if n.hcode == hash && eq(&n.val) {
+                return Some(&mut n.val);
+            }
+            node = unsafe { n.next.as_mut() };
+        }
+        None
+    }
+
     pub fn remove(&mut self, hash: usize, eq: impl Fn(&T) -> bool) -> Option<T> {
         let pos = hash & self.mask;
         unsafe {
@@ -68,10 +80,14 @@ impl<T> Drop for HTab<T> {
         for i in 0..(self.mask + 1) {
             let head = unsafe { *self.tab.add(i) };
             if !head.is_null() {
-                unsafe { drop(Box::from_raw(head)); }
+                unsafe {
+                    drop(Box::from_raw(head));
+                }
             }
         }
-        unsafe { dealloc(self.tab as *mut u8, layout); }
+        unsafe {
+            dealloc(self.tab as *mut u8, layout);
+        }
     }
 }
 
@@ -148,11 +164,11 @@ mod tests {
     fn collision_chain_all_reachable() {
         // hcodes 0, 8, 16 all map to slot 0 with mask=7
         let mut tab: HTab<KVPair> = HTab::with_capacity(8);
-        tab.insert(0,  kv("a", "1"));
-        tab.insert(8,  kv("b", "2"));
+        tab.insert(0, kv("a", "1"));
+        tab.insert(8, kv("b", "2"));
         tab.insert(16, kv("c", "3"));
-        assert!(tab.lookup(0,  eq_key("a")).is_some());
-        assert!(tab.lookup(8,  eq_key("b")).is_some());
+        assert!(tab.lookup(0, eq_key("a")).is_some());
+        assert!(tab.lookup(8, eq_key("b")).is_some());
         assert!(tab.lookup(16, eq_key("c")).is_some());
     }
 
@@ -169,12 +185,12 @@ mod tests {
     #[test]
     fn remove_middle_of_chain() {
         let mut tab: HTab<KVPair> = HTab::with_capacity(8);
-        tab.insert(0,  kv("a", "1"));
-        tab.insert(8,  kv("b", "2"));
+        tab.insert(0, kv("a", "1"));
+        tab.insert(8, kv("b", "2"));
         tab.insert(16, kv("c", "3"));
         tab.remove(8, eq_key("b"));
-        assert!(tab.lookup(0,  eq_key("a")).is_some());
-        assert!(tab.lookup(8,  eq_key("b")).is_none());
+        assert!(tab.lookup(0, eq_key("a")).is_some());
+        assert!(tab.lookup(8, eq_key("b")).is_none());
         assert!(tab.lookup(16, eq_key("c")).is_some());
     }
 
@@ -183,7 +199,13 @@ mod tests {
         let mut tab: HTab<KVPair> = HTab::with_capacity(8);
         tab.insert(99, kv("x", "val_x"));
         tab.insert(99, kv("y", "val_y"));
-        assert_eq!(tab.lookup(99, eq_key("x")).map(|p| p.val.as_str()), Some("val_x"));
-        assert_eq!(tab.lookup(99, eq_key("y")).map(|p| p.val.as_str()), Some("val_y"));
+        assert_eq!(
+            tab.lookup(99, eq_key("x")).map(|p| p.val.as_str()),
+            Some("val_x")
+        );
+        assert_eq!(
+            tab.lookup(99, eq_key("y")).map(|p| p.val.as_str()),
+            Some("val_y")
+        );
     }
 }
